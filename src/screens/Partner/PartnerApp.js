@@ -376,7 +376,7 @@ function RouteOptionsScreen({ navigation }) {
 }
 
 function MainTabs() {
-  const icons = { Home: 'view-dashboard-outline', Route: 'map-marker-path', Partners: 'storefront-outline', Orders: 'receipt-text-outline', More: 'dots-grid' };
+  const icons = { Home: 'view-dashboard-outline', Route: 'map-marker-path', Partners: 'storefront-outline', Orders: 'receipt', More: 'dots-grid' };
   return (
     <Tab.Navigator screenOptions={({ route }) => ({
       headerShown: false,

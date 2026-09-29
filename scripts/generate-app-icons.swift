@@ -1,18 +1,36 @@
 import AppKit
 import Foundation
-import ImageIO
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-guard let source = CGImageSourceCreateWithURL(root.appendingPathComponent("assets/logo.png") as CFURL, nil),
-  let logo = CGImageSourceCreateImageAtIndex(source, 0, nil),
-  let cropped = logo.cropping(to: CGRect(x: 88, y: 208, width: 320, height: 320)) else {
-  fatalError("Missing assets/logo.png")
+func color(_ hex: UInt32) -> NSColor {
+  NSColor(
+    red: CGFloat((hex >> 16) & 0xFF) / 255,
+    green: CGFloat((hex >> 8) & 0xFF) / 255,
+    blue: CGFloat(hex & 0xFF) / 255,
+    alpha: 1
+  )
 }
 
-// The existing Meri davai desk logo includes this square D+ brand mark.
-let mark = NSImage(cgImage: cropped, size: NSSize(width: 320, height: 320))
+func fill(_ path: NSBezierPath, with color: NSColor) {
+  color.setFill()
+  path.fill()
+}
 
-func render(_ size: Int, markFraction: CGFloat, at path: String) {
+func drawPartnerMark() {
+  let softWhite = color(0xC6E0FF)
+  fill(NSBezierPath(roundedRect: NSRect(x: 115, y: 180, width: 300, height: 360), xRadius: 145, yRadius: 145), with: softWhite)
+  fill(NSBezierPath(ovalIn: NSRect(x: 205, y: 505, width: 125, height: 125)), with: softWhite)
+  fill(NSBezierPath(roundedRect: NSRect(x: 609, y: 180, width: 300, height: 360), xRadius: 145, yRadius: 145), with: softWhite)
+  fill(NSBezierPath(ovalIn: NSRect(x: 694, y: 505, width: 125, height: 125)), with: softWhite)
+  fill(NSBezierPath(roundedRect: NSRect(x: 300, y: 155, width: 424, height: 425), xRadius: 205, yRadius: 205), with: .white)
+  fill(NSBezierPath(ovalIn: NSRect(x: 420, y: 500, width: 184, height: 184)), with: .white)
+
+  fill(NSBezierPath(ovalIn: NSRect(x: 714, y: 706, width: 190, height: 190)), with: color(0x16A79A))
+  fill(NSBezierPath(roundedRect: NSRect(x: 793, y: 744, width: 32, height: 114), xRadius: 8, yRadius: 8), with: .white)
+  fill(NSBezierPath(roundedRect: NSRect(x: 752, y: 785, width: 114, height: 32), xRadius: 8, yRadius: 8), with: .white)
+}
+
+func render(_ size: Int, at path: String, adaptiveForeground: Bool = false) {
   guard let bitmap = NSBitmapImageRep(
     bitmapDataPlanes: nil,
     pixelsWide: size,
@@ -30,10 +48,16 @@ func render(_ size: Int, markFraction: CGFloat, at path: String) {
   NSGraphicsContext.saveGraphicsState()
   NSGraphicsContext.current = context
   context.imageInterpolation = .high
-  NSColor.white.setFill()
-  NSRect(x: 0, y: 0, width: size, height: size).fill()
-  let width = CGFloat(size) * markFraction
-  mark.draw(in: NSRect(x: (CGFloat(size) - width) / 2, y: (CGFloat(size) - width) / 2, width: width, height: width))
+  let graphics = context.cgContext
+  graphics.scaleBy(x: CGFloat(size) / 1024, y: CGFloat(size) / 1024)
+  if !adaptiveForeground {
+    color(0x286BF2).setFill()
+    NSRect(x: 0, y: 0, width: 1024, height: 1024).fill()
+  } else {
+    graphics.translateBy(x: 154, y: 154)
+    graphics.scaleBy(x: 0.7, y: 0.7)
+  }
+  drawPartnerMark()
   context.flushGraphics()
   NSGraphicsContext.restoreGraphicsState()
   let output = root.appendingPathComponent(path)
@@ -44,7 +68,7 @@ func render(_ size: Int, markFraction: CGFloat, at path: String) {
 let iosPath = "ios/MdDesk/Images.xcassets/AppIcon.appiconset"
 let iosSizes = [40, 60, 58, 87, 80, 120, 180, 1024]
 let iosImages = iosSizes.map { size -> [String: String] in
-  render(size, markFraction: 0.78, at: "\(iosPath)/icon-\(size).png")
+  render(size, at: "\(iosPath)/icon-\(size).png")
   let pointSize: Int
   let scale: Int
   let idiom: String
@@ -71,8 +95,8 @@ try! contentsData.write(to: root.appendingPathComponent("\(iosPath)/Contents.jso
 let androidSizes = ["mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192]
 for (density, size) in androidSizes {
   let directory = "android/app/src/main/res/mipmap-\(density)"
-  render(size, markFraction: 0.78, at: "\(directory)/ic_launcher.png")
-  render(size, markFraction: 0.78, at: "\(directory)/ic_launcher_round.png")
-  render(size * 9 / 4, markFraction: 0.62, at: "\(directory)/ic_launcher_foreground.png")
+  render(size, at: "\(directory)/ic_launcher.png")
+  render(size, at: "\(directory)/ic_launcher_round.png")
+  render(size * 9 / 4, at: "\(directory)/ic_launcher_foreground.png", adaptiveForeground: true)
 }
-render(512, markFraction: 0.78, at: "android/app/src/main/ic_launcher-playstore.png")
+render(512, at: "android/app/src/main/ic_launcher-playstore.png")
