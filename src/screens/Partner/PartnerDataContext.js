@@ -7,8 +7,10 @@ import React, {
   useState,
 } from 'react';
 import {
+  createWholesaleCustomer,
   createWholesaleOrder,
   fetchPartnerWorkspace,
+  updateWholesaleCustomer,
 } from '../../api/partner';
 
 const PartnerDataContext = createContext(null);
@@ -59,6 +61,18 @@ export function PartnerDataProvider({ children }) {
     [],
   );
 
+  const createPartner = useCallback(async body => {
+    const customer = await createWholesaleCustomer(body);
+    setVersion(current => current + 1);
+    return customer;
+  }, []);
+
+  const updatePartner = useCallback(async (id, body) => {
+    const customer = await updateWholesaleCustomer(id, body);
+    setVersion(current => current + 1);
+    return customer;
+  }, []);
+
   const value = useMemo(
     () => ({
       ...workspace,
@@ -66,8 +80,10 @@ export function PartnerDataProvider({ children }) {
       error,
       refresh: () => setVersion(current => current + 1),
       submitOrder,
+      createPartner,
+      updatePartner,
     }),
-    [workspace, loading, error, submitOrder],
+    [workspace, loading, error, submitOrder, createPartner, updatePartner],
   );
 
   return (

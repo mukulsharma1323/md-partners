@@ -54,16 +54,17 @@ export function buildPartnerWorkspace(payload) {
     customerOrders.push(order);
     orderIdsByCustomer.set(order.customerId, customerOrders);
   });
-  const partners = Array.from(orderIdsByCustomer.entries())
-    .map(([customerId, customerOrders]) => {
-      const customer = customersById.get(customerId);
-      if (!customer || String(customer.type).toLowerCase() !== 'wholesale') {
-        return null;
-      }
-      const latestOrder = customerOrders.reduce((latest, order) =>
-        new Date(order.createdAt || 0) > new Date(latest.createdAt || 0)
-          ? order
-          : latest,
+  const partners = customers
+    .filter(customer => String(customer.type).toLowerCase() === 'wholesale')
+    .map(customer => {
+      const customerOrders = orderIdsByCustomer.get(customer.id) || [];
+      const latestOrder = customerOrders.reduce(
+        (latest, order) =>
+          !latest ||
+          new Date(order.createdAt || 0) > new Date(latest.createdAt || 0)
+            ? order
+            : latest,
+        null,
       );
       return {
         ...customer,
@@ -72,12 +73,11 @@ export function buildPartnerWorkspace(payload) {
         type: 'Wholesale',
         status: customer.status || 'Active',
         due: customer.outstandingAmount,
-        order: latestOrder.totalAmount,
-        lastOrderAt: latestOrder.createdAt,
+        order: latestOrder?.totalAmount || 0,
+        lastOrderAt: latestOrder?.createdAt || customer.lastOrderAt || null,
         orderCount: customerOrders.length,
       };
-    })
-    .filter(Boolean);
+    });
 
   const productStocks = new Map();
   const preferredBatches = new Map();
@@ -142,4 +142,12 @@ export async function fetchPartnerWorkspace({ signal } = {}) {
 
 export function createWholesaleOrder(body) {
   return request('/pharmacy/orders/wholesale', { method: 'POST', body });
+}
+
+export function createWholesaleCustomer(body) {
+  return request('/pharmacy/customers/wholesale', { method: 'POST', body });
+}
+
+export function updateWholesaleCustomer(id, body) {
+  return request(`/pharmacy/customers/wholesale/${id}`, { method: 'PATCH', body });
 }

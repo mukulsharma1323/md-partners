@@ -63,6 +63,24 @@ it('uses the latest tracking event as the effective order status', () => {
   );
 });
 
+it('includes wholesale customers even when they have not placed an order yet', () => {
+  const workspace = buildPartnerWorkspace({
+    ...payload,
+    customers: [
+      ...payload.customers,
+      { id: 5, name: 'New Wholesale Customer', type: 'wholesale' },
+    ],
+  });
+
+  expect(workspace.partners).toHaveLength(2);
+  expect(workspace.partners.find(partner => partner.id === '5')).toMatchObject({
+    name: 'New Wholesale Customer',
+    order: 0,
+    orderCount: 0,
+    lastOrderAt: null,
+  });
+});
+
 it('surfaces missing workspace permissions instead of returning empty data', () => {
   expect(() =>
     buildPartnerWorkspace({ ...payload, loadedSections: ['catalog'] }),

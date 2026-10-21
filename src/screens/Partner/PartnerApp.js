@@ -25,6 +25,19 @@ import MedicineImage from '../Pharmacy/MedicineImage';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const PRODUCT_PAGE_SIZE = 30;
+const PARTNER_FIELDS = [
+  { key: 'name', label: 'Partner name', required: true },
+  { key: 'phone', label: 'Phone number', required: true, keyboardType: 'phone-pad', autoCapitalize: 'none' },
+  { key: 'email', label: 'Email', keyboardType: 'email-address', autoCapitalize: 'none' },
+  { key: 'gstin', label: 'GSTIN', autoCapitalize: 'characters' },
+  { key: 'drugLicense', label: 'Drug license', autoCapitalize: 'characters' },
+  { key: 'panNumber', label: 'PAN number', autoCapitalize: 'characters' },
+  { key: 'address', label: 'Address', multiline: true },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State' },
+  { key: 'pincode', label: 'PIN code', keyboardType: 'number-pad', autoCapitalize: 'none' },
+  { key: 'creditDays', label: 'Credit days', keyboardType: 'number-pad', autoCapitalize: 'none' },
+];
 const C = {
   bg: '#F3F6FA',
   white: '#FFFFFF',
@@ -259,8 +272,8 @@ function ActionTile({ icon, label, onPress }) {
 function RouteScreen({ navigation }) {
   const { partners, loading, error, refresh } = usePartnerData();
   return (
-    <Page navigation={navigation} title="Wholesale partners" eyebrow="MD TRACKER ACCOUNTS" subtitle={`${partners.length} customers linked to wholesale orders`}>
-      <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!partners.length} emptyText="Partners appear here when MD Tracker has a wholesale order for them." />
+    <Page navigation={navigation} title="Wholesale partners" eyebrow="MD TRACKER ACCOUNTS" subtitle={`${partners.length} wholesale customer accounts`}>
+      <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!partners.length} emptyText="Wholesale customer accounts for your assigned store appear here." />
       {partners.map((item, index) => <Card key={item.id} style={{ paddingVertical: 0, marginBottom: 9 }}><PartnerRow item={item} compact onPress={() => navigation.navigate('CustomerDetail', { customerId: item.id })} /><View style={s.stopFooter}><Label size={10} color={C.muted}>{String(index + 1).padStart(2, '0')} · WHOLESALE</Label><Label size={10} color={C.muted}>Last order {formatDate(item.lastOrderAt)}</Label></View></Card>)}
     </Page>
   );
@@ -271,12 +284,97 @@ function PartnersScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const shown = partners.filter(item => `${item.name} ${item.owner} ${item.area}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
-    <Page navigation={navigation} title="Your partners" eyebrow="WHOLESALE ACCOUNTS" subtitle="Customers with wholesale orders in MD Tracker">
+    <Page navigation={navigation} title="Your partners" eyebrow="WHOLESALE ACCOUNTS" subtitle="Wholesale customers assigned to your store">
+      <Button title="Add partner" icon="account-plus-outline" onPress={() => navigation.navigate('PartnerForm')} />
       <View style={s.searchBox}><Icon name="magnify" size={20} color={C.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search name, owner or area" placeholderTextColor={C.muted} style={s.searchInput} /></View>
       <View style={s.filterRow}><Badge>All {partners.length}</Badge><Badge tone="green">Wholesale {partners.length}</Badge></View>
       <View style={s.listHeading}><Label size={11} color={C.muted} bold>PARTNER</Label><Label size={11} color={C.muted} bold>OUTSTANDING</Label></View>
-      <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!shown.length} emptyText={query ? 'No wholesale partners match this search.' : 'Partners appear here when an MD Tracker wholesale order is linked to their customer account.'} />
+      <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!shown.length} emptyText={query ? 'No wholesale partners match this search.' : 'Add a wholesale customer account to get started.'} />
       {shown.map(item => <Card key={item.id} style={{ marginBottom: 9, paddingVertical: 2 }}><PartnerRow item={item} onPress={() => navigation.navigate('CustomerDetail', { customerId: item.id })} /><View style={s.partnerBalance}><Label size={10} color={C.muted}>{item.type} · Last order {formatCurrency(item.order)}</Label><Label size={11} bold color={C.ink}>{formatCurrency(item.due)}</Label></View></Card>)}
+    </Page>
+  );
+}
+
+function PartnerFormScreen({ navigation, route }) {
+  const { partners, createPartner, updatePartner } = usePartnerData();
+  const customer = partners.find(
+    partner => partner.id === String(route.params?.customerId),
+  );
+  const editing = Boolean(route.params?.customerId);
+  const [form, setForm] = useState(() => ({
+    name: customer?.name || '',
+    phone: customer?.phone || '',
+    email: customer?.email || '',
+    gstin: customer?.gstin || '',
+    drugLicense: customer?.drugLicense || '',
+    panNumber: customer?.panNumber || '',
+    address: customer?.address || '',
+    city: customer?.city || '',
+    state: customer?.state || '',
+    pincode: customer?.pincode || '',
+    creditDays: customer ? String(customer.creditDays ?? '') : '',
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const updateField = (key, value) => {
+    setForm(current => ({ ...current, [key]: value }));
+  };
+  const savePartner = async () => {
+    if (saving) {
+      return;
+    }
+    if (!form.name.trim() || !form.phone.trim()) {
+      setError('Partner name and phone number are required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const body = {
+        ...form,
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        creditDays: form.creditDays.trim(),
+      };
+      if (editing) {
+        await updatePartner(customer.id, body);
+      } else {
+        await createPartner(body);
+      }
+      navigation.goBack();
+    } catch (createError) {
+      setError(createError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (editing && !customer) {
+    return <Page navigation={navigation} title="Edit partner"><WorkspaceNotice empty emptyText="This wholesale customer is not available in the current workspace." /></Page>;
+  }
+  return (
+    <Page navigation={navigation} title={editing ? 'Edit partner' : 'Add partner'} eyebrow="WHOLESALE ACCOUNT" subtitle={editing ? 'Update this partner profile' : 'Create a partner profile for your assigned store'}>
+      <Card style={s.notice}><Icon name="information-outline" size={18} color={C.blue} /><Label size={11} color={C.muted} style={{ flex: 1, marginLeft: 9 }}>Name and phone are required. Other details are optional. Blank credit days default to 21; customer code, store, active status and opening balance are managed automatically.</Label></Card>
+      <Card style={s.partnerForm}>
+        {PARTNER_FIELDS.map(field => (
+          <View key={field.key} style={s.formField}>
+            <Label size={11} bold>{field.label}{field.required ? ' *' : ' (optional)'}</Label>
+            <TextInput
+              accessibilityLabel={field.label}
+              value={form[field.key]}
+              onChangeText={value => updateField(field.key, value)}
+              placeholder={field.required ? `Enter ${field.label.toLowerCase()}` : `Enter ${field.label.toLowerCase()} (optional)`}
+              placeholderTextColor={C.muted}
+              keyboardType={field.keyboardType || 'default'}
+              autoCapitalize={field.autoCapitalize || 'sentences'}
+              multiline={field.multiline}
+              editable={!saving}
+              style={[s.formInput, field.multiline && s.formInputMultiline]}
+            />
+          </View>
+        ))}
+      </Card>
+      <WorkspaceNotice error={error} />
+      <Button title={saving ? 'Saving partner…' : editing ? 'Save changes' : 'Save partner'} icon="check" onPress={savePartner} />
     </Page>
   );
 }
@@ -338,7 +436,9 @@ function CustomerDetailScreen({ navigation, route }) {
       <Card style={s.detailHero}><View style={s.detailAvatar}><Label size={18} bold color={C.blue}>{customer.name.split(' ').slice(0, 2).map(word => word[0]).join('')}</Label></View><View style={{ flex: 1, marginLeft: 12 }}><Label size={14} bold>{customer.owner}</Label><Label size={11} color={C.muted}>{customer.area} · {customer.type}</Label><View style={{ marginTop: 7, alignSelf: 'flex-start' }}><Badge tone="green">Active account</Badge></View></View><TouchableOpacity style={s.smallIcon}><Icon name="phone-outline" size={19} color={C.blue} /></TouchableOpacity></Card>
       <View style={[s.metricGrid, { marginTop: 12 }]}><Metric value={formatCurrency(customer.due)} label="Outstanding" note="From customer record" color={C.amber} /><Metric value={formatCurrency(customer.order)} label="Last order" note={formatDate(customer.lastOrderAt)} color={C.blue} /></View>
       <Section title="Partner snapshot" />
-      <Card><InfoRow label="Wholesale orders" value={String(customer.orderCount)} /><InfoRow label="Phone" value={customer.phone || 'Not provided'} /><InfoRow label="Email" value={customer.email || 'Not provided'} /><InfoRow label="Customer code" value={customer.customerCode || 'Not provided'} last /></Card>
+      <Card><InfoRow label="Wholesale orders" value={String(customer.orderCount)} /><InfoRow label="Phone" value={customer.phone || 'Not provided'} /><InfoRow label="Email" value={customer.email || 'Not provided'} /><InfoRow label="GSTIN" value={customer.gstin || 'Not provided'} /><InfoRow label="Drug license" value={customer.drugLicense || 'Not provided'} /><InfoRow label="PAN" value={customer.panNumber || 'Not provided'} /><InfoRow label="Address" value={[customer.address, customer.city, customer.state, customer.pincode].filter(Boolean).join(', ') || 'Not provided'} /><InfoRow label="Credit days" value={String(customer.creditDays ?? 21)} /><InfoRow label="Customer code" value={customer.customerCode || 'Not provided'} last /></Card>
+      <Button title="Edit partner information" icon="account-edit-outline" subtle onPress={() => navigation.navigate('PartnerForm', { customerId: customer.id })} />
+      <View style={{ height: 10 }} />
       <Button title="Book a wholesale order" icon="clipboard-plus-outline" onPress={() => navigation.navigate('OrderBooking', { customerId: customer.id })} />
     </Page>
   );
@@ -579,7 +679,7 @@ function OrderHistoryScreen({ navigation }) {
 
 function RouteOptionsScreen({ navigation }) {
   const { partners } = usePartnerData();
-  return <Page navigation={navigation} title="Route options" eyebrow="WHOLESALE ACCOUNTS" subtitle="Account actions for the current store"><Card><InfoRow label="Available wholesale partners" value={String(partners.length)} /><InfoRow label="Route planning" value="Not provided by the backend" /><InfoRow label="Order-based accounts" value="MD Tracker wholesale customers" last /></Card><Section title="Partner tools" /><Card style={{ paddingVertical: 2 }}><ToolRow icon="calendar-plus-outline" title="Browse wholesale partners" detail="Open accounts linked to orders" onPress={() => navigation.navigate('PartnerTabs', { screen: 'Partners' })} /></Card></Page>;
+  return <Page navigation={navigation} title="Route options" eyebrow="WHOLESALE ACCOUNTS" subtitle="Account actions for the current store"><Card><InfoRow label="Available wholesale partners" value={String(partners.length)} /><InfoRow label="Route planning" value="Not provided by the backend" /><InfoRow label="Order-based accounts" value="MD Tracker wholesale customers" last /></Card><Section title="Partner tools" />  <Card style={{ paddingVertical: 2 }}><ToolRow icon="calendar-plus-outline" title="Browse wholesale partners" detail="Open wholesale customer accounts" onPress={() => navigation.navigate('PartnerTabs', { screen: 'Partners' })} /></Card></Page>;
 }
 
 function MainTabs() {
@@ -609,6 +709,7 @@ export default function PartnerApp() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg } }}>
           <Stack.Screen name="PartnerTabs" component={MainTabs} />
+          <Stack.Screen name="PartnerForm" component={PartnerFormScreen} />
           <Stack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
           <Stack.Screen name="VisitCheckin" component={VisitCheckinScreen} />
           <Stack.Screen name="OrderBooking" component={OrderBookingScreen} />
@@ -679,6 +780,10 @@ const s = StyleSheet.create({
   stopFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 10 },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderColor: C.line, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, height: 46, marginBottom: 10 },
   searchInput: { flex: 1, color: C.ink, fontFamily: 'DMSans-Regular', fontSize: 12, paddingVertical: 0, marginLeft: 7 },
+  partnerForm: { paddingVertical: 4 },
+  formField: { marginBottom: 12 },
+  formInput: { minHeight: 43, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, marginTop: 5, color: C.ink, fontFamily: 'DMSans-Regular', fontSize: 13 },
+  formInputMultiline: { minHeight: 76, textAlignVertical: 'top' },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 },
   listHeading: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7, paddingHorizontal: 2 },
   partnerBalance: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 7, paddingBottom: 10, borderTopWidth: 1, borderColor: C.line },
