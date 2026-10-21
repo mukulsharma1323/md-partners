@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -61,6 +63,17 @@ const formatOrderStatus = value => {
     .map(word => word[0].toUpperCase() + word.slice(1))
     .join(' ');
 };
+
+async function callSupport() {
+  try {
+    await Linking.openURL('tel:+918755810744');
+  } catch (error) {
+    Alert.alert(
+      'Unable to open phone',
+      error.message || 'Please call +91 87558 10744 manually.',
+    );
+  }
+}
 
 function WorkspaceNotice({ loading, error, onRetry, empty, emptyText }) {
   if (loading) {
@@ -273,10 +286,10 @@ function OrdersScreen({ navigation }) {
   return (
     <Page navigation={navigation} title="Wholesale orders" eyebrow="MD TRACKER FULFILMENT" subtitle="Orders and lifecycle updates from the wholesale section">
       <Button title="Create partner order" icon="plus" onPress={() => navigation.navigate('OrderBooking')} />
-      <View style={[s.filterRow, { marginTop: 16 }]}><Badge>All {orders.length}</Badge><Badge tone="amber">{orders.filter(order => order.status === 'placed').length} placed</Badge><Badge tone="blue">{orders.filter(order => !['delivered', 'invoice-updated'].includes(order.status)).length} in progress</Badge><Badge tone="green">{orders.filter(order => order.status === 'delivered').length} delivered</Badge></View>
+      <View style={[s.filterRow, { marginTop: 16 }]}><Badge>All {orders.length}</Badge><Badge tone="amber">{orders.filter(order => order.currentStatus === 'placed').length} placed</Badge><Badge tone="blue">{orders.filter(order => !['delivered', 'invoice-updated'].includes(order.currentStatus)).length} in progress</Badge><Badge tone="green">{orders.filter(order => ['delivered', 'invoice-updated'].includes(order.currentStatus)).length} fulfilled</Badge></View>
       <Section title="Recent wholesale orders" action="History" onAction={() => navigation.navigate('OrderHistory')} />
       <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!orders.length} emptyText="Wholesale orders placed in MD Tracker will appear here." />
-      {orders.map(order => <Card key={order.id} style={{ marginBottom: 10 }}><View style={s.orderTop}><View><Label size={11} color={C.muted}>WHO-{order.id} · {formatDate(order.createdAt)}</Label><Label size={14} bold style={{ marginTop: 5 }}>{order.customer?.name || 'Wholesale customer'}</Label></View><Badge tone={order.status === 'delivered' ? 'green' : order.status === 'placed' ? 'amber' : 'blue'}>{formatOrderStatus(order.tracking.at(-1)?.status || order.status)}</Badge></View><View style={s.orderBottom}><Label size={11} color={C.muted}>{order.itemCount} line items · {order.billingType || 'wholesale'}</Label><Label size={15} bold>{formatCurrency(order.totalAmount)}</Label></View></Card>)}
+      {orders.map(order => <Card key={order.id} style={{ marginBottom: 10 }}><View style={s.orderTop}><View><Label size={11} color={C.muted}>WHO-{order.id} · {formatDate(order.createdAt)}</Label><Label size={14} bold style={{ marginTop: 5 }}>{order.customer?.name || 'Wholesale customer'}</Label></View><Badge tone={['delivered', 'invoice-updated'].includes(order.currentStatus) ? 'green' : order.currentStatus === 'placed' ? 'amber' : 'blue'}>{formatOrderStatus(order.currentStatus)}</Badge></View><View style={s.orderBottom}><Label size={11} color={C.muted}>{order.itemCount} line items · {order.billingType || 'wholesale'}</Label><Label size={15} bold>{formatCurrency(order.totalAmount)}</Label></View></Card>)}
       <TouchableOpacity onPress={() => navigation.navigate('OrderHistory')} style={s.centerLink}><Label size={12} bold color={C.blue}>View order history</Label><Icon name="arrow-right" size={16} color={C.blue} /></TouchableOpacity>
     </Page>
   );
@@ -348,7 +361,8 @@ function VisitCheckinScreen({ navigation, route }) {
       <Card style={s.visitHeader}><View style={s.partnerMark}><Label size={14} bold color={C.blue}>{customer.name.slice(0, 2).toUpperCase()}</Label></View><View style={{ flex: 1 }}><Label size={14} bold>{customer.name}</Label><Label size={11} color={C.muted}>{customer.area} · {customer.owner}</Label></View><Badge tone="green">{customer.status}</Badge></Card>
       <Section title="Visit outcome" />
       <View style={{ gap: 8 }}>{outcomes.map((item, index) => <TouchableOpacity key={item} onPress={() => setOutcome(item)} style={[s.outcome, outcome === item && s.outcomeSelected]}><View style={[s.radio, outcome === item && s.radioSelected]}>{outcome === item ? <View style={s.radioDot} /> : null}</View><Label size={13} bold={outcome === item}>{item}</Label><Icon name={['clipboard-check-outline', 'cash-check', 'calendar-clock-outline', 'store-off-outline'][index]} size={19} color={outcome === item ? C.blue : C.muted} style={{ marginLeft: 'auto' }} /></TouchableOpacity>)}</View>
-      <Button title={outcome === 'Order placed' ? 'Continue to order' : 'Save visit outcome'} icon="arrow-right" onPress={() => outcome === 'Order placed' ? navigation.navigate('OrderBooking', { customerId: customer.id }) : navigation.navigate('CustomerDetail', { customerId: customer.id })} />
+      <WorkspaceNotice empty emptyText="Visit outcomes are not saved yet. The backend currently has no customer visit/check-in endpoint." />
+      <Button title={outcome === 'Order placed' ? 'Continue to order' : 'Confirm outcome'} icon="arrow-right" onPress={() => outcome === 'Order placed' ? navigation.navigate('OrderBooking', { customerId: customer.id }) : Alert.alert('Visit not recorded', 'This outcome is only a selection. No visit or payment record has been saved.')} />
     </Page>
   );
 }
@@ -455,17 +469,22 @@ function CollectionScreen({ navigation }) {
   const outstanding = partners.reduce((sum, partner) => sum + partner.due, 0);
   return (
     <Page navigation={navigation} title="Collections" eyebrow="PAYMENT FOLLOW-UPS" subtitle="Outstanding balances from wholesale customer records">
-      <Card style={s.collectionHero}><Label size={11} color="#B7C8E4" bold>TOTAL OUTSTANDING</Label><Label size={28} color={C.white} bold style={{ marginTop: 3 }}>{formatCurrency(outstanding)}</Label><Label size={11} color="#D5E0F0">Across {partners.length} wholesale partners</Label></Card>
+      <Card style={s.collectionHero}><Label size={11} color="#B7C8E4" bold>RECORDED CUSTOMER BALANCE</Label><Label size={28} color={C.white} bold style={{ marginTop: 3 }}>{formatCurrency(outstanding)}</Label><Label size={11} color="#D5E0F0">Customer-record values · {partners.length} wholesale partners</Label></Card>
+      <WorkspaceNotice empty emptyText="The backend does not reconcile wholesale orders with customer receipts. These are customer-record balances only." />
       <Section title="Payment follow-ups" action="View ledger" onAction={() => navigation.navigate('Ledger')} />
       <WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!partners.length} emptyText="Wholesale partner balances will appear here." />
-      {partners.map(item => <Card key={item.id} style={{ marginBottom: 9 }}><View style={s.orderTop}><View><Label size={13} bold>{item.name}</Label><Label size={10} color={C.muted} style={{ marginTop: 3 }}>{item.type} · {item.orderCount} wholesale orders</Label></View><Badge tone={item.due > 0 ? 'amber' : 'green'}>{item.due > 0 ? 'Balance due' : 'Clear'}</Badge></View><View style={s.orderBottom}><Label size={10} color={C.muted}>Outstanding balance</Label><Label size={15} bold>{formatCurrency(item.due)}</Label></View></Card>)}
+      {partners.map(item => <Card key={item.id} style={{ marginBottom: 9 }}><View style={s.orderTop}><View><Label size={13} bold>{item.name}</Label><Label size={10} color={C.muted} style={{ marginTop: 3 }}>{item.type} · {item.orderCount} wholesale orders</Label></View><Badge tone={item.due > 0 ? 'amber' : 'green'}>{item.due > 0 ? 'Recorded balance' : 'No balance recorded'}</Badge></View><View style={s.orderBottom}><Label size={10} color={C.muted}>Customer record balance</Label><Label size={15} bold>{formatCurrency(item.due)}</Label></View><TouchableOpacity onPress={() => navigation.navigate('CollectionDetail', { customerId: item.id })} style={s.centerLink}><Label size={11} bold color={C.blue}>Receipt endpoint status</Label><Icon name="arrow-right" size={15} color={C.blue} /></TouchableOpacity></Card>)}
     </Page>
   );
 }
 
-function CollectionDetailScreen({ navigation }) {
-  const [method, setMethod] = useState('UPI');
-  return <Page navigation={navigation} title="Record collection" eyebrow="PAYMENT ENTRY" subtitle="Collection details are shown for preview"><Card><InfoRow label="Partner" value="LifeCare Pharma" /><InfoRow label="Outstanding" value="₹62,200" /><InfoRow label="Amount received" value="₹28,000" /><InfoRow label="Reference" value="UPI · XXXX 4821" last /></Card><Section title="Payment method" /><View style={s.filterRow}>{['UPI', 'Cash', 'Bank transfer'].map(item => <TouchableOpacity key={item} onPress={() => setMethod(item)}><Badge tone={method === item ? 'green' : 'blue'}>{item}</Badge></TouchableOpacity>)}</View><Button title="Save collection preview" icon="check" onPress={() => navigation.goBack()} /></Page>;
+function CollectionDetailScreen({ navigation, route }) {
+  const { partners, loading, error, refresh } = usePartnerData();
+  const partner = partners.find(item => item.id === String(route.params?.customerId));
+  if (!partner) {
+    return <Page navigation={navigation} title="Payment recording"><WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!loading && !error} emptyText="This wholesale customer is not available in the current workspace." /></Page>;
+  }
+  return <Page navigation={navigation} title="Receipt status" eyebrow="CUSTOMER RECEIPTS" subtitle={partner.name}><Card><InfoRow label="Customer record balance" value={formatCurrency(partner.due)} /><InfoRow label="Wholesale orders" value={String(partner.orderCount)} /><InfoRow label="Latest order" value={formatCurrency(partner.order)} last /></Card><WorkspaceNotice error="The backend has no customer receipt endpoint. This screen is read-only; no payment has been recorded. Supplier expense payments are separate and must not be used as customer receipts." /><Button title="Back to collections" icon="arrow-left" subtle onPress={() => navigation.goBack()} /></Page>;
 }
 
 function LedgerScreen({ navigation }) {
@@ -490,11 +509,13 @@ function CatalogScreen({ navigation }) {
 function TargetsScreen({ navigation }) {
   const { orders, partners, loading, error, refresh } = usePartnerData();
   const orderValue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
-  const deliveredOrders = orders.filter(order => order.status === 'delivered').length;
+  const deliveredOrders = orders.filter(order =>
+    ['delivered', 'invoice-updated'].includes(order.currentStatus),
+  ).length;
   const fulfillmentRate = orders.length
     ? Math.round((deliveredOrders / orders.length) * 100)
     : 0;
-  return <Page navigation={navigation} title="Sales performance" eyebrow="WHOLESALE WORKSPACE" subtitle="Performance metrics from MD Tracker orders"><Card style={s.targetCard}><View style={s.targetTop}><View style={{ flex: 1 }}><Label size={11} color="#B7C8E4" bold>WHOLESALE ORDER VALUE</Label><Label size={28} color={C.white} bold style={{ marginTop: 4 }}>{formatCurrency(orderValue)}</Label><Label size={11} color="#D5E0F0">{orders.length} orders across {partners.length} partners</Label></View><View style={s.targetCircle}><Label size={19} bold color={C.white}>{fulfillmentRate}%</Label><Label size={9} color="#C9D6E9">DELIVERED</Label></View></View><Progress value={fulfillmentRate} color="#56D4C1" /><Label size={10} color="#D5E0F0" style={{ marginTop: 9 }}>{deliveredOrders} of {orders.length} wholesale orders delivered</Label></Card><WorkspaceNotice loading={loading} error={error} onRetry={refresh} /><Section title="Wholesale summary" /><Card><InfoRow label="Orders placed" value={String(orders.length)} /><InfoRow label="Delivered orders" value={String(deliveredOrders)} /><InfoRow label="Wholesale partners" value={String(partners.length)} last /></Card><View style={{ height: 14 }} /><Button title="Open wholesale orders" icon="receipt-text-outline" onPress={() => navigation.navigate('PartnerTabs', { screen: 'Orders' })} /></Page>;
+  return <Page navigation={navigation} title="Sales performance" eyebrow="ALL-TIME WHOLESALE METRICS" subtitle="Order totals from the MD Tracker wholesale workflow (not sales targets)"><Card style={s.targetCard}><View style={s.targetTop}><View style={{ flex: 1 }}><Label size={11} color="#B7C8E4" bold>ALL-TIME ORDER VALUE</Label><Label size={28} color={C.white} bold style={{ marginTop: 4 }}>{formatCurrency(orderValue)}</Label><Label size={11} color="#D5E0F0">{orders.length} orders across {partners.length} partners</Label></View><View style={s.targetCircle}><Label size={19} bold color={C.white}>{fulfillmentRate}%</Label><Label size={9} color="#C9D6E9">DELIVERED</Label></View></View><Progress value={fulfillmentRate} color="#56D4C1" /><Label size={10} color="#D5E0F0" style={{ marginTop: 9 }}>{deliveredOrders} of {orders.length} wholesale orders delivered or invoiced</Label></Card><WorkspaceNotice loading={loading} error={error} onRetry={refresh} /><Section title="All-time wholesale summary" /><Card><InfoRow label="Orders placed" value={String(orders.length)} /><InfoRow label="Delivered or invoiced" value={String(deliveredOrders)} /><InfoRow label="Wholesale partners" value={String(partners.length)} last /></Card><View style={{ height: 14 }} /><Button title="Open wholesale orders" icon="receipt-text-outline" onPress={() => navigation.navigate('PartnerTabs', { screen: 'Orders' })} /></Page>;
 }
 
 function InventoryScreen({ navigation }) {
@@ -506,19 +527,19 @@ function InventoryScreen({ navigation }) {
 function NotificationsScreen({ navigation }) {
   const { orders, loading, error, refresh } = usePartnerData();
   const notices = orders.slice(0, 10).map(order => {
-    const status = order.tracking.at(-1)?.status || order.status;
+    const status = order.currentStatus;
     return {
       id: order.id,
       title: `Wholesale order WHO-${order.id} · ${formatOrderStatus(status)}`,
       meta: `${order.customer?.name || 'Wholesale customer'} · ${formatDate(order.createdAt)}`,
-      tone: status === 'delivered' ? 'green' : status === 'placed' ? 'amber' : 'blue',
+      tone: ['delivered', 'invoice-updated'].includes(status) ? 'green' : status === 'placed' ? 'amber' : 'blue',
     };
   });
   return <Page navigation={navigation} title="Notifications" eyebrow="WHOLESALE UPDATES" subtitle="Recent order activity from MD Tracker"><WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!notices.length} emptyText="Wholesale order updates will appear here." /><Section title="Recent activity" />{notices.map(notice => <Card key={notice.id} style={s.noticeRow}><View style={[s.toolIcon, { backgroundColor: notice.tone === 'amber' ? C.amberSoft : notice.tone === 'green' ? C.tealSoft : C.blueSoft }]}><Icon name="receipt-text-outline" size={18} color={notice.tone === 'amber' ? C.amber : notice.tone === 'green' ? C.teal : C.blue} /></View><View style={{ flex: 1 }}><Label size={12} bold>{notice.title}</Label><Label size={10} color={C.muted} style={{ marginTop: 4 }}>{notice.meta}</Label></View></Card>)}</Page>;
 }
 
 function SupportScreen({ navigation }) {
-  return <Page navigation={navigation} title="Help & support" eyebrow="SALES OPERATIONS DESK" subtitle="Get help while you are in the field"><Card style={s.supportHero}><View style={s.supportGlyph}><Icon name="headset" size={23} color={C.white} /></View><Label size={16} bold style={{ marginTop: 12 }}>How can we help?</Label><Label size={11} color={C.muted} style={{ marginTop: 3 }}>Our sales operations team is online</Label><View style={{ marginTop: 14 }}><Button title="Start a support request" icon="arrow-top-right" onPress={() => navigation.navigate('SupportRequest')} /></View></Card><Section title="Open requests" action="All tickets" onAction={() => navigation.navigate('SupportRequest')} /><Card><InfoRow label="Order sync delayed in offline mode" value="In review" /><InfoRow label="Territory remap · Pitampura stores" value="Open" last /></Card><Section title="Quick help" /><Card style={{ paddingVertical: 2 }}><ToolRow icon="file-document-outline" title="Order and scheme guide" detail="Policies and trade terms" onPress={() => navigation.navigate('SupportRequest')} /><ToolRow icon="account-question-outline" title="Contact your manager" detail="Regional sales team" onPress={() => navigation.navigate('Profile')} /></Card></Page>;
+  return <Page navigation={navigation} title="Help & support" eyebrow="SALES OPERATIONS DESK" subtitle="Support requests are not sent from this MVP"><Card style={s.supportHero}><View style={s.supportGlyph}><Icon name="headset" size={23} color={C.white} /></View><Label size={16} bold style={{ marginTop: 12 }}>Need help?</Label><Label size={11} color={C.muted} style={{ marginTop: 3 }}>Call our support team at +91 87558 10744</Label><View style={{ marginTop: 14 }}><Button title="Call support" icon="phone" onPress={callSupport} /></View></Card><Section title="For help with MD Partners" /><Card><Label size={12} color={C.muted}>Support tickets are not connected yet. Please call +91 87558 10744 for assistance.</Label></Card></Page>;
 }
 
 function SupportRequestScreen({ navigation }) {
@@ -553,7 +574,7 @@ function SyncStatusScreen({ navigation }) {
 
 function OrderHistoryScreen({ navigation }) {
   const { orders, loading, error, refresh } = usePartnerData();
-  return <Page navigation={navigation} title="Order history" eyebrow="ALL WHOLESALE ORDERS" subtitle={`${orders.length} orders from the MD Tracker wholesale workflow`}><WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!orders.length} emptyText="No wholesale orders have been recorded for this store." />{orders.map(order => <Card key={order.id} style={{ marginBottom: 9 }}><View style={s.orderTop}><View><Label size={10} color={C.muted}>WHO-{order.id} · {formatDate(order.createdAt)}</Label><Label size={13} bold style={{ marginTop: 4 }}>{order.customer?.name || 'Wholesale customer'}</Label></View><Badge tone={order.status === 'delivered' ? 'green' : order.status === 'placed' ? 'amber' : 'blue'}>{formatOrderStatus(order.tracking.at(-1)?.status || order.status)}</Badge></View><View style={s.orderBottom}><Label size={10} color={C.muted}>{order.itemCount} product lines · {order.billingType || 'wholesale'}</Label><Label size={13} bold>{formatCurrency(order.totalAmount)}</Label></View></Card>)}</Page>;
+  return <Page navigation={navigation} title="Order history" eyebrow="ALL WHOLESALE ORDERS" subtitle={`${orders.length} orders from the MD Tracker wholesale workflow`}><WorkspaceNotice loading={loading} error={error} onRetry={refresh} empty={!orders.length} emptyText="No wholesale orders have been recorded for this store." />{orders.map(order => <Card key={order.id} style={{ marginBottom: 9 }}><View style={s.orderTop}><View><Label size={10} color={C.muted}>WHO-{order.id} · {formatDate(order.createdAt)}</Label><Label size={13} bold style={{ marginTop: 4 }}>{order.customer?.name || 'Wholesale customer'}</Label></View><Badge tone={order.currentStatus === 'delivered' || order.currentStatus === 'invoice-updated' ? 'green' : order.currentStatus === 'placed' ? 'amber' : 'blue'}>{formatOrderStatus(order.currentStatus)}</Badge></View><View style={s.orderBottom}><Label size={10} color={C.muted}>{order.itemCount} product lines · {order.billingType || 'wholesale'}</Label><Label size={13} bold>{formatCurrency(order.totalAmount)}</Label></View></Card>)}</Page>;
 }
 
 function RouteOptionsScreen({ navigation }) {

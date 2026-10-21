@@ -4,6 +4,16 @@ import { normalizeProduct } from './products';
 const REQUIRED_SECTIONS = ['catalog', 'crm', 'wholesale'];
 const number = value => (Number.isFinite(Number(value)) ? Number(value) : 0);
 
+export function getCurrentOrderStatus(order, tracking = []) {
+  const latestEvent = tracking.reduce((latest, event) => {
+    if (!latest || new Date(event.timestamp) > new Date(latest.timestamp)) {
+      return event;
+    }
+    return latest;
+  }, null);
+  return latestEvent?.status || order.status || 'placed';
+}
+
 export function buildPartnerWorkspace(payload) {
   const loadedSections = Array.isArray(payload.loadedSections)
     ? payload.loadedSections
@@ -105,14 +115,18 @@ export function buildPartnerWorkspace(payload) {
     orderItemsByOrderId.set(orderId, (orderItemsByOrderId.get(orderId) || 0) + 1);
   });
   const ordersWithCustomers = orders
-    .map(order => ({
-      ...order,
-      customer: customersById.get(order.customerId) || null,
-      itemCount: orderItemsByOrderId.get(order.id) || 0,
-      tracking: payload.orderTracking
+    .map(order => {
+      const tracking = payload.orderTracking
         .filter(event => String(event.orderId) === order.id)
-        .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp)),
-    }))
+        .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
+      return {
+        ...order,
+        currentStatus: getCurrentOrderStatus(order, tracking),
+        customer: customersById.get(order.customerId) || null,
+        itemCount: orderItemsByOrderId.get(order.id) || 0,
+        tracking,
+      };
+    })
     .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0));
 
   return { customers, partners, products, orders: ordersWithCustomers };

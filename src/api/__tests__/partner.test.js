@@ -38,6 +38,7 @@ it('derives partners only from wholesale customers with real wholesale orders', 
   expect(workspace.orders[0]).toMatchObject({
     id: '10',
     itemCount: 2,
+    currentStatus: 'received',
     customer: { name: 'Wholesale Customer' },
   });
   expect(workspace.products[0]).toMatchObject({
@@ -47,6 +48,19 @@ it('derives partners only from wholesale customers with real wholesale orders', 
     batchNumber: 'B-7',
     stock: 5,
   });
+});
+
+it('uses the latest tracking event as the effective order status', () => {
+  const workspace = buildPartnerWorkspace({
+    ...payload,
+    orderTracking: [
+      { orderId: 10, status: 'delivered', timestamp: '2026-10-20T12:00:00Z' },
+      { orderId: 10, status: 'placed', timestamp: '2026-10-20T09:00:00Z' },
+    ],
+  });
+  expect(workspace.orders.find(order => order.id === '10').currentStatus).toBe(
+    'delivered',
+  );
 });
 
 it('surfaces missing workspace permissions instead of returning empty data', () => {
