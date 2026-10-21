@@ -1,8 +1,8 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { Checkbox, TextInput } from 'react-native-paper';
+import { Image } from 'react-native';
 import Login from '../src/screens/Login';
-import themeContext from '../src/theme/themeContext';
 import { Button } from '../src/screens/Pharmacy/PharmacyUI';
 import { getRememberedCredentials, clearRememberedCredentials } from '../src/auth/rememberedCredentials';
 
@@ -29,11 +29,14 @@ afterEach(() => {
 
 async function mount() {
   await act(async () => {
-    tree = renderer.create(
-      <themeContext.Provider value={{ logo: 1 }}><Login /></themeContext.Provider>,
-    );
+    tree = renderer.create(<Login />);
   });
 }
+
+it('renders the default logo without a theme provider', async () => {
+  await mount();
+  expect(tree.root.findByType(Image).props.source).toBeTruthy();
+});
 
 it('starts checked and fills saved username and password', async () => {
   await mount();

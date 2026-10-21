@@ -96,7 +96,7 @@ export default function Login() {
           contentContainerStyle={{ padding: 24, paddingTop: 40 }}
         >
           <Image
-            source={theme.logo}
+            source={theme?.logo || require('../../assets/logo.png')}
             resizeMode="contain"
             style={{ width: Dimensions.get('window').width / 3, height: 45 }}
           />
