@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
       body: {
         email: email.trim(),
         password,
+        clientApp: 'md-partners',
         sessionMeta: { platform: Platform.OS, deviceName: 'MD Tracker mobile' },
       },
     });
